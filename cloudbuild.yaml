@@ -1,0 +1,30 @@
+steps:
+- name: gcr.io/einride/cloud-builder-rust
+  entrypoint: '/gcb-setup/run.sh'
+  volumes:
+  - name: 'ssh'
+    path: /root/.ssh
+  env:
+    - 'BRANCH_NAME=$BRANCH_NAME'
+    - 'REPO_NAME=$REPO_NAME'
+
+- name: gcr.io/einride/cloud-builder-rust
+  entrypoint: 'make'
+  volumes:
+    - name: 'ssh'
+      path: /root/.ssh
+
+- name: gcr.io/einride/cloud-builder-rust
+  entrypoint: 'make'
+  args: ['build/release']
+  volumes:
+    - name: 'ssh'
+      path: /root/.ssh
+
+artifacts:
+  objects:
+    location: 'gs://einride-artifacts-proto-crate-gen/'
+    paths: ['target/release/${SHORT_SHA}_proto_crate_gen']
+
+options:
+ machineType: 'N1_HIGHCPU_8'
