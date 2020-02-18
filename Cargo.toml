@@ -1,5 +1,5 @@
 [package]
-name = "proto_crate_gen"
+name = "proto-crate-gen"
 version = "0.1.0"
 authors = ["Einride"]
 description = "Generate Rust crate from trees of probobuf files"
@@ -8,4 +8,9 @@ edition = "2018"
 [dependencies]
 clap = "2.33.0"
 walkdir = "2.3.1"
-tonic-build = "0.1.1"
+tonic-build = {version = "0.1.1", default-features = false }
+
+# Until fix has been approved in Prost master and/or released we use a patched version of Prost to
+# allow for using protoc from current environment. /Olle
+[patch.crates-io]
+prost-build = { git = "git://git@github.com/einride/prost.git", branch = "runtime_protoc" }

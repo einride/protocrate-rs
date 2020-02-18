@@ -118,10 +118,13 @@ fn generate_lib(src_path: &Path) {
     let mut file = File::create(&lib_rs_path).expect("error creating lib.rs");
     file.write_all(content.as_bytes())
         .expect("error writing lib.rs");
-    Command::new("rustfmt")
+    // Format if rustfmt is available otherwise skip it
+    if let Err(err) = Command::new("rustfmt")
         .args(&["--edition", "2018", lib_rs_path.to_str().unwrap()])
         .spawn()
-        .expect("error formatting lib.rs");
+    {
+        println!("Failed to format lib.rs: {:?}", err);
+    }
 }
 
 fn generate_cargo_toml(

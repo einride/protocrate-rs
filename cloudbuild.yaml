@@ -24,7 +24,7 @@ steps:
 artifacts:
   objects:
     location: 'gs://einride-artifacts-proto-crate-gen/'
-    paths: ['target/release/${SHORT_SHA}_proto_crate_gen']
+    paths: ['target/release/${SHORT_SHA}_proto-crate-gen']
 
 options:
  machineType: 'N1_HIGHCPU_8'

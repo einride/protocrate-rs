@@ -12,5 +12,5 @@ cargo build
 ## Example Usage
 Generate a crate named `my-pb-crate` in direcotry `gen`  using protobuf files from the directories `proto/common`, `proto/internal` and `proto/external`:
 ```console
-proto_crate_gen --output gen --pkg-name my-pb-crate --pkg-version 0.2.1 --root proto/common proto/internal proto/external
+proto-crate-gen --output gen --pkg-name my-pb-crate --pkg-version 0.2.1 --root proto/common proto/internal proto/external
 ```

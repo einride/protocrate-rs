@@ -6,6 +6,9 @@ all: \
 	clippy \
 	test
 
+export PROTOC := protoc
+export PROTOC_INCLUDE := .
+
 # GIT_BUILD_REV will be embeded in the plugin as build revision at buildtime
 SHORT_SHA ?= $(shell git describe --always --dirty)
 
@@ -32,4 +35,4 @@ test:
 .PHONY: build/release
 build/release:
 	cargo build --all  --all-targets --release
-	cp target/release/proto_crate_gen target/release/${SHORT_SHA}_proto_crate_gen
+	cp target/release/proto-crate-gen target/release/${SHORT_SHA}_proto-crate-gen
