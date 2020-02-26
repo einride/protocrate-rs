@@ -34,5 +34,10 @@ test:
 
 .PHONY: build/release
 build/release:
-	cargo build --all  --all-targets --release
+	cargo build --all --all-targets --release
 	cp target/release/proto-crate-gen target/release/${SHORT_SHA}_proto-crate-gen
+
+.PHONY: build/darwin-release
+build/darwin-release:
+	cargo build --target x86_64-apple-darwin --all --all-targets --release
+	cp target/x86_64-apple-darwin/release/proto-crate-gen target/x86_64-apple-darwin/release/${SHORT_SHA}_proto-crate-gen_x86_64-apple-darwin
