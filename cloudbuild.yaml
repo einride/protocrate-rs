@@ -21,10 +21,20 @@ steps:
     - name: 'ssh'
       path: /root/.ssh
 
+- name: gcr.io/einride/cloud-builder-rust
+  entrypoint: 'make'
+  args: ['build/darwin-release']
+  volumes:
+    - name: 'ssh'
+      path: /root/.ssh
+
 artifacts:
   objects:
     location: 'gs://einride-artifacts-proto-crate-gen/'
-    paths: ['target/release/${SHORT_SHA}_proto-crate-gen']
+    paths: [
+      'target/release/${SHORT_SHA}_proto-crate-gen',
+      'target/x86_64-apple-darwin/release/${SHORT_SHA}_proto-crate-gen_x86_64-apple-darwin'
+    ]
 
 options:
  machineType: 'N1_HIGHCPU_8'
