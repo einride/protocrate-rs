@@ -99,7 +99,7 @@ fn write_lib_rs(content: &mut String, modules: &Module, tree_depth: usize) {
     }
 }
 
-fn generate_lib(src_path: &Path) {
+fn generate_lib(src_path: &Path, disable_rustfmt: bool) {
     // Build a dictionary of modules based on file name (each dot separated
     // part of the file name is a submodule').
     let mut root_tree = Module::default();
@@ -150,12 +150,14 @@ fn generate_lib(src_path: &Path) {
     let mut file = File::create(&lib_rs_path).expect("error creating lib.rs");
     file.write_all(content.as_bytes())
         .expect("error writing lib.rs");
-    // Format if rustfmt is available otherwise skip it
-    if let Err(err) = Command::new("rustfmt")
-        .args(&["--edition", "2018", lib_rs_path.to_str().unwrap()])
-        .spawn()
-    {
-        println!("Failed to format lib.rs: {:?}", err);
+    if !disable_rustfmt {
+        // Format with rustfmt if is available otherwise skip it
+        if let Err(err) = Command::new("rustfmt")
+            .args(&["--edition", "2018", lib_rs_path.to_str().unwrap()])
+            .spawn()
+        {
+            println!("Failed to format lib.rs: {:?}", err);
+        }
     }
 }
 
@@ -239,6 +241,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .value_name("VERSION")
                 .help("Set package version"),
         )
+        .arg(
+            Arg::with_name("disable-rustfmt")
+                .long("disable-rustfmt")
+                .help(
+                    "Disable rustfmt to be run on generated code. Will otherwise run if present.",
+                ),
+        )
         .get_matches();
 
     // Parse cli arguments
@@ -259,7 +268,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         vec![]
     };
-
+    let disable_rustfmt = matches.is_present("disable-rustfmt");
     let _e = std::fs::remove_dir_all(&src_dir);
     create_dir_all(&src_dir).expect("error creating src dir");
     {
@@ -277,10 +286,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .collect();
         tonic_build::configure()
             .out_dir(&src_dir)
+            .format(!disable_rustfmt)
             .compile(&proto_paths[..], &proto_root_paths[..])?;
     }
     // Generate a lib.rs file containing all the module definitions and include statements.
-    generate_lib(Path::new(&src_dir));
+    generate_lib(Path::new(&src_dir), disable_rustfmt);
 
     // Copy the Cargo template and set version
     generate_cargo_toml(

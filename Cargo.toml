@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 clap = "2.33.3"
 walkdir = "2.3.1"
-tonic-build = {version = "0.3.1", default-features = false, features = ["prost", "transport"] }
+tonic-build = {version = "0.3.1", default-features = false, features = ["rustfmt", "prost", "transport"] }
 
 # Until fix has been approved in Prost master and/or released we use a patched version of Prost to
 # allow for using protoc from current environment. /Olle
