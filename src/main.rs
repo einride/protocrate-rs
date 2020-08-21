@@ -53,16 +53,26 @@ fn file_name_to_mod_path(mod_name: &str, modules: &mut Module, path: &[&str]) {
 }
 
 fn write_lib_rs(content: &mut String, modules: &Module) {
-    for mod_name in &modules.internal_mod {
+    let mut int_mods_sorted = modules.internal_mod.clone();
+    int_mods_sorted.sort();
+    for mod_name in int_mods_sorted {
         writeln!(content, "mod {};", mod_name).unwrap();
     }
     writeln!(content).unwrap();
-    for child in &modules.children {
+    let mut children_sorted: Vec<(&str, &Module)> = modules
+        .children
+        .iter()
+        .map(|(name, module)| (name.as_str(), module))
+        .collect();
+    children_sorted.sort_by(|a, b| a.0.cmp(b.0));
+    for child in children_sorted {
         write!(content, "pub mod {} {{ ", escape_reserved_keywords(child.0)).unwrap();
         write_lib_rs(content, child.1);
         writeln!(content, " }}").unwrap();
     }
-    for mod_name in &modules.pub_mod {
+    let mut pub_mods_sorted = modules.pub_mod.clone();
+    pub_mods_sorted.sort();
+    for mod_name in pub_mods_sorted {
         writeln!(content, "pub use super::{}::*;", mod_name).unwrap();
     }
 }
