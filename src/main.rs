@@ -45,20 +45,30 @@ fn file_name_to_mod_path(mod_name: &str, modules: &mut Module, path: &[&str]) {
         if path.len() == 1 {
             modules
                 .internal_mod
-                .push(escape_reserved_keywords(mod_name));
+                .push(escape_reserved_keywords(mod_name).trim().to_owned());
         }
     } else {
-        modules.pub_mod.push(escape_reserved_keywords(mod_name));
+        modules
+            .pub_mod
+            .push(escape_reserved_keywords(mod_name).trim().to_owned());
     }
 }
 
-fn write_lib_rs(content: &mut String, modules: &Module) {
+// Write whitespace according to the current tree depth
+fn depth_to_ws(tree_depth: usize) -> String {
+    let mut tmp = String::new();
+    for _ in 0..tree_depth {
+        write!(&mut tmp, "    ").unwrap();
+    }
+    tmp
+}
+
+fn write_lib_rs(content: &mut String, modules: &Module, tree_depth: usize) {
     let mut int_mods_sorted = modules.internal_mod.clone();
     int_mods_sorted.sort();
     for mod_name in int_mods_sorted {
-        writeln!(content, "mod {};", mod_name).unwrap();
+        writeln!(content, "{}mod {};", depth_to_ws(tree_depth), mod_name).unwrap();
     }
-    writeln!(content).unwrap();
     let mut children_sorted: Vec<(&str, &Module)> = modules
         .children
         .iter()
@@ -66,14 +76,26 @@ fn write_lib_rs(content: &mut String, modules: &Module) {
         .collect();
     children_sorted.sort_by(|a, b| a.0.cmp(b.0));
     for child in children_sorted {
-        write!(content, "pub mod {} {{ ", escape_reserved_keywords(child.0)).unwrap();
-        write_lib_rs(content, child.1);
-        writeln!(content, " }}").unwrap();
+        writeln!(
+            content,
+            "{}pub mod {} {{",
+            depth_to_ws(tree_depth),
+            escape_reserved_keywords(child.0)
+        )
+        .unwrap();
+        write_lib_rs(content, child.1, tree_depth + 1);
+        writeln!(content, "{}}}", depth_to_ws(tree_depth),).unwrap();
     }
     let mut pub_mods_sorted = modules.pub_mod.clone();
     pub_mods_sorted.sort();
     for mod_name in pub_mods_sorted {
-        writeln!(content, "pub use super::{}::*;", mod_name).unwrap();
+        writeln!(
+            content,
+            "{}pub use super::{}::*;",
+            depth_to_ws(tree_depth),
+            mod_name
+        )
+        .unwrap();
     }
 }
 
@@ -124,7 +146,7 @@ fn generate_lib(src_path: &Path) {
     writeln!(content, "#![allow(clippy::large_enum_variant)]").unwrap();
     writeln!(content, "#![allow(clippy::unreadable_literal)]").unwrap();
     writeln!(content).unwrap();
-    write_lib_rs(&mut content, &root_tree);
+    write_lib_rs(&mut content, &root_tree, 0);
     let mut file = File::create(&lib_rs_path).expect("error creating lib.rs");
     file.write_all(content.as_bytes())
         .expect("error writing lib.rs");
