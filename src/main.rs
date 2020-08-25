@@ -104,42 +104,40 @@ fn generate_lib(src_path: &Path, disable_rustfmt: bool) {
     // part of the file name is a submodule').
     let mut root_tree = Module::default();
     let lib_rs_path = src_path.join("lib.rs");
-    fs::read_dir(src_path)
+    let mut file_paths: Vec<PathBuf> = fs::read_dir(src_path)
         .expect("failed to read src dir")
         .map(|res| res.map(|e| e.path()))
-        .filter(|f| match f {
+        .filter_map(|f| match f {
             // don't include lib.rs
-            Ok(path) => path != &lib_rs_path,
-            _ => false,
+            Ok(path) if path != lib_rs_path => Some(path),
+            _ => None,
         })
-        .for_each(|f| {
-            if let Ok(path) = f {
-                // Rename and move each file into directory tree and build a module tree structure.
-
-                // A file is named 'src/simian_public.simulator.v2.rs' will be moved to
-                // 'src/simian_public/simulator/simian_public_simulator_v2_internal.rs'
-                // and its content will be made public at module path 'simian_public::simulator::v2'.
-                let file_stem = path
-                    .file_stem()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .replace("r#", "");
-                let mod_path = file_stem.split('.').collect::<Vec<&str>>();
-                let internal_mod_name = file_stem.replace(".", "_") + "_internal";
-                {
-                    let new_file_name = internal_mod_name.clone() + ".rs";
-                    let mut new_dir = path.parent().unwrap().to_path_buf();
-                    for mod_name in &mod_path[0..mod_path.len() - 1] {
-                        new_dir = new_dir.join(mod_name);
-                    }
-                    std::fs::create_dir_all(&new_dir).expect("error creating mod directory");
-                    std::fs::rename(&path, new_dir.join(&new_file_name))
-                        .expect("error moving file");
-                }
-                file_name_to_mod_path(&internal_mod_name, &mut root_tree, &mod_path);
+        .collect();
+    file_paths.sort();
+    for path in file_paths {
+        // Rename and move each file into directory tree and build a module tree structure.
+        // A file is named 'src/simian_public.simulator.v2.rs' will be moved to
+        // 'src/simian_public/simulator/simian_public_simulator_v2_internal.rs'
+        // and its content will be made public at module path 'simian_public::simulator::v2'.
+        let file_stem = path
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .replace("r#", "");
+        let mod_path = file_stem.split('.').collect::<Vec<&str>>();
+        let internal_mod_name = file_stem.replace(".", "_") + "_internal";
+        {
+            let new_file_name = internal_mod_name.clone() + ".rs";
+            let mut new_dir = path.parent().unwrap().to_path_buf();
+            for mod_name in &mod_path[0..mod_path.len() - 1] {
+                new_dir = new_dir.join(mod_name);
             }
-        });
+            std::fs::create_dir_all(&new_dir).expect("error creating mod directory");
+            std::fs::rename(&path, new_dir.join(&new_file_name)).expect("error moving file");
+        }
+        file_name_to_mod_path(&internal_mod_name, &mut root_tree, &mod_path);
+    }
     let mut content = String::new();
     // Allow some clippy warnings in the generated protobuf code
     writeln!(content, "#![allow(clippy::wrong_self_convention)]").unwrap();
@@ -273,7 +271,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     create_dir_all(&src_dir).expect("error creating src dir");
     {
         // Find all .proto files in any of the root paths.
-        let proto_paths: Vec<String> = proto_root_paths
+        let mut proto_paths: Vec<String> = proto_root_paths
             .iter()
             .map(|path| {
                 WalkDir::new(path)
@@ -284,6 +282,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })
             .flatten()
             .collect();
+        proto_paths.sort();
         tonic_build::configure()
             .out_dir(&src_dir)
             .format(!disable_rustfmt)
