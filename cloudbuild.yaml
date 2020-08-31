@@ -1,12 +1,12 @@
 steps:
 - name: gcr.io/einride/cloud-builder-rust
-  entrypoint: '/gcb-setup/run.sh'
+  args: ["/cloud-builder/git-init.sh"]
   volumes:
   - name: 'ssh'
     path: /root/.ssh
   env:
-    - 'BRANCH_NAME=$BRANCH_NAME'
-    - 'REPO_NAME=$REPO_NAME'
+    - COMMIT_SHA=$COMMIT_SHA
+    - REPO_NAME=$REPO_NAME
 
 - name: gcr.io/einride/cloud-builder-rust
   entrypoint: 'make'
