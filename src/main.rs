@@ -1,7 +1,7 @@
 use clap::{App, Arg};
+use codegen::Scope;
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::fmt::Write;
 use std::fs::create_dir_all;
 use std::fs::{self, File};
 use std::io::Read;
@@ -13,8 +13,30 @@ use walkdir::WalkDir;
 #[derive(Clone, Debug, Default)]
 struct Module {
     children: HashMap<String, Module>,
-    internal_mod: Vec<String>,
+    priv_mod: Vec<String>,
     pub_mod: Vec<String>,
+}
+
+impl Module {
+    fn sorted_children(&self) -> Vec<(&str, &Module)> {
+        let mut child_mods: Vec<(&str, &Module)> = self
+            .children
+            .iter()
+            .map(|(name, module)| (name.as_str(), module))
+            .collect();
+        child_mods.sort_unstable_by(|a, b| a.0.cmp(b.0));
+        child_mods
+    }
+    fn sorted_priv_modules(&self) -> Vec<&str> {
+        let mut mods: Vec<&str> = self.priv_mod.iter().map(|s| s.as_str()).collect();
+        mods.sort_unstable();
+        mods
+    }
+    fn sorted_pub_modules(&self) -> Vec<&str> {
+        let mut mods: Vec<&str> = self.pub_mod.iter().map(|s| s.as_str()).collect();
+        mods.sort_unstable();
+        mods
+    }
 }
 
 // Modules with name matching Rust reserved keywords needs escaping.
@@ -44,7 +66,7 @@ fn file_name_to_mod_path(mod_name: &str, modules: &mut Module, path: &[&str]) {
         file_name_to_mod_path(mod_name, &mut child, &path[1..]);
         if path.len() == 1 {
             modules
-                .internal_mod
+                .priv_mod
                 .push(escape_reserved_keywords(mod_name).trim().to_owned());
         }
     } else {
@@ -54,54 +76,29 @@ fn file_name_to_mod_path(mod_name: &str, modules: &mut Module, path: &[&str]) {
     }
 }
 
-// Write whitespace according to the current tree depth
-fn depth_to_ws(tree_depth: usize) -> String {
-    let mut tmp = String::new();
-    for _ in 0..tree_depth {
-        write!(&mut tmp, "    ").unwrap();
+fn write_lib_rs(scope: &mut Scope, module: &Module) {
+    // Declare internal modules.
+    for mod_name in module.sorted_priv_modules() {
+        scope.new_module(&mod_name);
     }
-    tmp
-}
-
-fn write_lib_rs(content: &mut String, modules: &Module, tree_depth: usize) {
-    let mut int_mods_sorted = modules.internal_mod.clone();
-    int_mods_sorted.sort();
-    for mod_name in int_mods_sorted {
-        writeln!(content, "{}mod {};", depth_to_ws(tree_depth), mod_name).unwrap();
+    // Traverse child modules.
+    for child in module.sorted_children() {
+        let module = scope
+            .new_module(&escape_reserved_keywords(child.0))
+            .vis("pub");
+        write_lib_rs(module.scope(), child.1);
     }
-    let mut children_sorted: Vec<(&str, &Module)> = modules
-        .children
-        .iter()
-        .map(|(name, module)| (name.as_str(), module))
-        .collect();
-    children_sorted.sort_by(|a, b| a.0.cmp(b.0));
-    for child in children_sorted {
-        writeln!(
-            content,
-            "{}pub mod {} {{",
-            depth_to_ws(tree_depth),
-            escape_reserved_keywords(child.0)
-        )
-        .unwrap();
-        write_lib_rs(content, child.1, tree_depth + 1);
-        writeln!(content, "{}}}", depth_to_ws(tree_depth),).unwrap();
-    }
-    let mut pub_mods_sorted = modules.pub_mod.clone();
-    pub_mods_sorted.sort();
-    for mod_name in pub_mods_sorted {
-        writeln!(
-            content,
-            "{}pub use super::{}::*;",
-            depth_to_ws(tree_depth),
-            mod_name
-        )
-        .unwrap();
+    // Use public modules.
+    for mod_name in module.sorted_pub_modules() {
+        scope
+            .import(&format!("super::{}", mod_name), "*")
+            .vis("pub");
     }
 }
 
 fn generate_lib(src_path: &Path, disable_rustfmt: bool) {
     // Build a dictionary of modules based on file name (each dot separated
-    // part of the file name is a submodule').
+    // part of the file name is a submodule).
     let mut root_tree = Module::default();
     let lib_rs_path = src_path.join("lib.rs");
     let mut file_paths: Vec<PathBuf> = fs::read_dir(src_path)
@@ -138,15 +135,14 @@ fn generate_lib(src_path: &Path, disable_rustfmt: bool) {
         }
         file_name_to_mod_path(&internal_mod_name, &mut root_tree, &mod_path);
     }
-    let mut content = String::new();
-    // Allow some clippy warnings in the generated protobuf code
-    writeln!(content, "#![allow(clippy::wrong_self_convention)]").unwrap();
-    writeln!(content, "#![allow(clippy::large_enum_variant)]").unwrap();
-    writeln!(content, "#![allow(clippy::unreadable_literal)]").unwrap();
-    writeln!(content).unwrap();
-    write_lib_rs(&mut content, &root_tree, 0);
-    let mut file = File::create(&lib_rs_path).expect("error creating lib.rs");
-    file.write_all(content.as_bytes())
+    let mut scope = Scope::new();
+    scope.raw("#![allow(clippy::wrong_self_convention)]");
+    scope.raw("#![allow(clippy::large_enum_variant)]");
+    scope.raw("#![allow(clippy::unreadable_literal)]");
+    write_lib_rs(&mut scope, &root_tree);
+    File::create(&lib_rs_path)
+        .expect("error creating lib.rs")
+        .write_all(scope.to_string().as_bytes())
         .expect("error writing lib.rs");
     if !disable_rustfmt {
         // Format with rustfmt if is available otherwise skip it
