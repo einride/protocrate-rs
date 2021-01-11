@@ -1,6 +1,9 @@
-use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
+use anyhow::{Context, Result};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct Module {
@@ -10,15 +13,14 @@ pub struct Module {
 }
 
 impl Module {
-    pub fn build(src_path: &Path) -> Self {
+    pub fn build(src_path: &Path, ignore_files: &[&Path]) -> Result<Self> {
         let mut root = Module::default();
-        let lib_rs_path = src_path.join("lib.rs");
         let mut file_paths: Vec<PathBuf> = fs::read_dir(src_path)
-            .expect("failed to read src dir")
+            .context("read src dir")?
             .map(|res| res.map(|e| e.path()))
             .filter_map(|f| match f {
                 // don't include lib.rs
-                Ok(path) if path != lib_rs_path => Some(path),
+                Ok(path) if !ignore_files.contains(&path.as_path()) => Some(path),
                 _ => None,
             })
             .collect();
@@ -29,24 +31,26 @@ impl Module {
             // and its content would be made public as module 'foo::bar::v2'.
             let file_stem = path
                 .file_stem()
-                .unwrap()
+                .context("file stem")?
                 .to_str()
-                .unwrap()
+                .context("file stem to string")?
                 .replace("r#", "");
             let mod_path: Vec<&str> = file_stem.split('.').collect();
             let internal_mod_name = file_stem.replace(".", "_") + "_internal";
             {
                 let new_file_name = internal_mod_name.clone() + ".rs";
-                let mut new_dir = path.parent().unwrap().to_path_buf();
+                let mut new_dir = path.parent().context("path parent")?.to_path_buf();
                 for mod_name in &mod_path[0..mod_path.len() - 1] {
                     new_dir = new_dir.join(mod_name);
                 }
-                std::fs::create_dir_all(&new_dir).expect("error creating mod directory");
-                std::fs::rename(&path, new_dir.join(&new_file_name)).expect("error moving file");
+                std::fs::create_dir_all(&new_dir)
+                    .context(format!("create directory ({})", new_dir.display()))?;
+                std::fs::rename(&path, new_dir.join(&new_file_name))
+                    .context(format!("move file ({})", path.display()))?;
             }
             root.path_to_mod(&internal_mod_name, &mod_path);
         }
-        root
+        Ok(root)
     }
     fn path_to_mod(&mut self, mod_name: &str, path: &[&str]) {
         if !path.is_empty() {

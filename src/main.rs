@@ -1,5 +1,6 @@
 mod module;
 
+use anyhow::{Context, Result};
 use clap::{App, Arg};
 use codegen::Scope;
 use std::ffi::OsStr;
@@ -11,7 +12,7 @@ use walkdir::WalkDir;
 
 use module::Module;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<()> {
     let matches = App::new(env!("CARGO_PKG_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
         .about("Generate rust/tonic code from protobuf")
@@ -85,7 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let disable_rustfmt = matches.is_present("disable-rustfmt");
     let _ignore_err = std::fs::remove_dir_all(&src_dir);
-    fs::create_dir_all(&src_dir).expect("error creating src dir");
+    fs::create_dir_all(&src_dir).context(format!("create dir ({})", src_dir.display()))?;
     {
         // Find all .proto files in any of the root paths.
         let mut proto_paths: Vec<String> = proto_root_paths
@@ -95,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .into_iter()
                     .filter_map(|e| e.ok())
                     .filter(|e| e.path().extension() == Some(OsStr::new("proto")))
-                    .map(|e| e.path().to_str().expect("error walking tree").to_owned())
+                    .map(|e| e.path().to_str().unwrap().to_owned())
             })
             .flatten()
             .collect();
@@ -104,7 +105,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         tonic_build::configure()
             .out_dir(&src_dir)
             .format(!disable_rustfmt)
-            .compile(&proto_paths[..], &proto_root_paths[..])?;
+            .compile(&proto_paths[..], &proto_root_paths[..])
+            .context(format!("generate protobuf ({})", src_dir.display()))?;
     }
     // Generate a lib.rs file containing all the module definitions and use statements.
     let lib_rs_path = src_dir.join("lib.rs");
@@ -113,11 +115,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         scope.raw("#![allow(clippy::wrong_self_convention)]");
         scope.raw("#![allow(clippy::large_enum_variant)]");
         scope.raw("#![allow(clippy::unreadable_literal)]");
-        mod_to_scope(&mut scope, &Module::build(Path::new(&src_dir)));
+        mod_to_scope(
+            &mut scope,
+            &Module::build(Path::new(&src_dir), &[&lib_rs_path])?,
+        );
         File::create(&lib_rs_path)
-            .expect("open lib.rs")
+            .context("create lib.rs")?
             .write_all(scope.to_string().as_bytes())
-            .expect("error writing lib.rs");
+            .context("write lib.rs")?;
     }
     if !disable_rustfmt {
         // Format with rustfmt if it is available otherwise skip it.
@@ -130,14 +135,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Copy the Cargo template and set version
-    write_cargo_toml(
+    Ok(write_cargo_toml(
         cargo_toml_template_path,
         &crate_dir.join("Cargo.toml"),
         pkg_name,
         pkg_authors,
         pkg_version,
-    );
-    Ok(())
+    )?)
 }
 
 fn mod_to_scope(scope: &mut Scope, module: &Module) {
@@ -164,12 +168,14 @@ fn write_cargo_toml(
     pkg_name: &str,
     pkg_authors: Vec<String>,
     pkg_version: &str,
-) {
+) -> Result<()> {
     let content = if let Some(template_path) = template_path {
         // Read template file
         let mut content = String::new();
-        let mut template_file = File::open(template_path).expect("error opening template file");
-        template_file.read_to_string(&mut content).unwrap();
+        let mut template_file = File::open(template_path).context("open template")?;
+        template_file
+            .read_to_string(&mut content)
+            .context("read template")?;
         content
     } else {
         // Use default template if no file was provided
@@ -187,7 +193,7 @@ fn write_cargo_toml(
         )
         .replace("_PKG_VERSION_", &format!("\"{}\"", pkg_version));
     File::create(output_path)
-        .expect("error creating Cargo.toml")
+        .context("error creating Cargo.toml")?
         .write_all(content.as_bytes())
-        .expect("error writing Cargo.toml");
+        .context("error writing Cargo.toml")
 }
