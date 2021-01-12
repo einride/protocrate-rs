@@ -1,15 +1,16 @@
 use anyhow::{Context, Result};
+use codegen::Scope;
 use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
 };
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Module {
     child_mod: HashMap<String, Module>,
     priv_mod: Vec<String>,
-    pub_mod: Vec<String>,
+    use_mod: Vec<String>,
 }
 
 impl Module {
@@ -19,7 +20,7 @@ impl Module {
             .context("read src dir")?
             .map(|res| res.map(|e| e.path()))
             .filter_map(|f| match f {
-                // don't include lib.rs
+                // Ignore some files.
                 Ok(path) if !ignore_files.contains(&path.as_path()) => Some(path),
                 _ => None,
             })
@@ -64,11 +65,11 @@ impl Module {
                     .push(escape_reserved_keywords(mod_name).trim().to_owned());
             }
         } else {
-            self.pub_mod
+            self.use_mod
                 .push(escape_reserved_keywords(mod_name).trim().to_owned());
         }
     }
-    pub fn sorted_children(&self) -> Vec<(&str, &Module)> {
+    fn sorted_children(&self) -> Vec<(&str, &Module)> {
         let mut child_mod: Vec<(&str, &Module)> = self
             .child_mod
             .iter()
@@ -77,15 +78,32 @@ impl Module {
         child_mod.sort_unstable_by(|a, b| a.0.cmp(b.0));
         child_mod
     }
-    pub fn sorted_priv_modules(&self) -> Vec<&str> {
+    fn sorted_priv_modules(&self) -> Vec<&str> {
         let mut mods: Vec<&str> = self.priv_mod.iter().map(|s| s.as_str()).collect();
         mods.sort_unstable();
         mods
     }
-    pub fn sorted_pub_modules(&self) -> Vec<&str> {
-        let mut mods: Vec<&str> = self.pub_mod.iter().map(|s| s.as_str()).collect();
+    fn sorted_use(&self) -> Vec<&str> {
+        let mut mods: Vec<&str> = self.use_mod.iter().map(|s| s.as_str()).collect();
         mods.sort_unstable();
         mods
+    }
+    pub fn codegen(&self, scope: &mut Scope) {
+        // Declare internal modules.
+        for mod_name in self.sorted_priv_modules() {
+            scope.new_module(&mod_name);
+        }
+        // Traverse child modules.
+        for (child_name, child_mod) in self.sorted_children() {
+            let module = scope.new_module(child_name).vis("pub");
+            child_mod.codegen(module.scope());
+        }
+        // Use public modules.
+        for mod_name in self.sorted_use() {
+            scope
+                .import(&format!("super::{}", mod_name), "*")
+                .vis("pub");
+        }
     }
 }
 
@@ -105,4 +123,120 @@ fn escape_reserved_keywords(ident: &str) -> String {
         _ => (),
     }
     ident
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempdir::TempDir;
+
+    fn create_files(paths: &[&Path]) {
+        for path in paths {
+            let dir = path.parent().unwrap();
+            fs::create_dir_all(dir).unwrap();
+            std::fs::File::create(path).unwrap();
+        }
+    }
+    // Remove unnecessary whitespace (\n and mulitple spaces)
+    fn strip(text: &str) -> String {
+        let mut tmp = text.replace("\n", "").trim().to_string();
+        loop {
+            let stripped = tmp.replace("  ", "");
+            if stripped != tmp {
+                tmp = stripped;
+            } else {
+                return tmp;
+            }
+        }
+    }
+
+    #[test]
+    fn single_file_no_child() {
+        // Given
+        let root = TempDir::new("root").unwrap();
+        create_files(&[&root.path().join("foo.rs")]);
+
+        // When
+        let module = Module::build(&root.path(), &[]).unwrap();
+
+        // Then
+        let mut scope = Scope::new();
+        module.codegen(&mut scope);
+        assert_eq!(
+            strip(&scope.to_string()),
+            strip(
+                r#"
+                mod foo_internal {}
+                pub mod foo {
+                    pub use super::foo_internal::*;
+                }
+                "#
+            )
+        );
+    }
+    #[test]
+    fn single_file_with_child() {
+        // Given
+        let root = TempDir::new("root").unwrap();
+        create_files(&[&root.path().join("foo.v1.rs")]);
+
+        // When
+        let module = Module::build(&root.path(), &[]).unwrap();
+
+        // Then
+        let mut scope = Scope::new();
+        module.codegen(&mut scope);
+        assert_eq!(
+            strip(&scope.to_string()),
+            strip(
+                r#"
+                pub mod foo {
+                    mod foo_v1_internal {}
+                    pub mod v1 {
+                        pub use super::foo_v1_internal::*;
+                    }
+                }
+                "#
+            )
+        );
+    }
+    #[test]
+    fn multiple_files() {
+        // Given
+        let root = TempDir::new("root").unwrap();
+        create_files(&[
+            &root.path().join("first.rs"),
+            &root.path().join("foo.v1.one.rs"),
+            &root.path().join("foo.v1.two.rs"),
+        ]);
+
+        // When
+        let module = Module::build(&root.path(), &[]).unwrap();
+
+        // Then
+        let mut scope = Scope::new();
+        module.codegen(&mut scope);
+        assert_eq!(
+            strip(&scope.to_string()),
+            strip(
+                r#"
+                mod first_internal {}
+                pub mod first {
+                    pub use super::first_internal::*;
+                }
+                pub mod foo {
+                    pub mod v1 {
+                        mod foo_v1_one_internal {}
+                        mod foo_v1_two_internal {}
+                        pub mod one {
+                            pub use super::foo_v1_one_internal::*;
+                        }
+                        pub mod two {
+                            pub use super::foo_v1_two_internal::*;
+                        }
+                    }
+                }"#
+            )
+        );
+    }
 }
