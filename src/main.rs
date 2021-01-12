@@ -1,95 +1,52 @@
 mod module;
 
 use anyhow::{Context, Result};
-use clap::{App, Arg};
 use codegen::Scope;
 use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use structopt::StructOpt;
 use walkdir::WalkDir;
 
 use module::Module;
 
-fn main() -> Result<()> {
-    let matches = App::new(env!("CARGO_PKG_NAME"))
-        .version(env!("CARGO_PKG_VERSION"))
-        .about("Generate rust/tonic code from protobuf")
-        .arg(
-            Arg::with_name("root")
-                .long("root")
-                .value_name("FILE")
-                .help("Root of protobuf tree")
-                .required(true)
-                .multiple(true),
-        )
-        .arg(
-            Arg::with_name("output-directory")
-                .long("output")
-                .value_name("DIR")
-                .help("Where crate should be generated")
-                .required(true),
-        )
-        .arg(
-            Arg::with_name("cargo-toml-template")
-                .long("cargo-toml-template")
-                .value_name("FILE")
-                .help("Use this Cargo.toml template file"),
-        )
-        .arg(
-            Arg::with_name("pkg-name")
-                .long("pkg-name")
-                .value_name("NAME")
-                .help("Set package name")
-                .required(true),
-        )
-        .arg(
-            Arg::with_name("pkg-author")
-                .long("pkg-author")
-                .value_name("AUTHOR")
-                .help("Set package author(s)")
-                .multiple(true),
-        )
-        .arg(
-            Arg::with_name("pkg-version")
-                .long("pkg-version")
-                .value_name("VERSION")
-                .help("Set package version"),
-        )
-        .arg(
-            Arg::with_name("disable-rustfmt")
-                .long("disable-rustfmt")
-                .help(
-                    "Disable rustfmt to be run on generated code. Will otherwise run if present.",
-                ),
-        )
-        .get_matches();
+#[derive(StructOpt, Debug)]
+#[structopt(name = env!("CARGO_PKG_NAME"))]
+struct Opt {
+    /// Where crate should be generated
+    #[structopt(short, long, parse(from_os_str))]
+    output_dir: PathBuf,
+    /// Cargo.toml template file to use
+    #[structopt(short, long, parse(from_os_str))]
+    cargo_toml_template: Option<PathBuf>,
+    /// Package name
+    #[structopt(short, long)]
+    pkg_name: String,
+    /// Package version
+    #[structopt(long, default_value = "0.1.0")]
+    pkg_version: String,
+    /// Package author(s)
+    #[structopt(long)]
+    pkg_author: Vec<String>,
+    /// Disable rustfmt to be run on generated code (will otherwise be run if present)
+    #[structopt(long)]
+    disable_rustfmt: bool,
+    /// Root directory of protobuf tree (can be multiple)
+    #[structopt(name = "DIR", required = true, min_values = 1)]
+    root: Vec<String>,
+}
 
-    // Parse cli arguments
-    let proto_root_paths: Vec<String> = matches
-        .values_of("root")
-        .unwrap()
-        .map(|v| v.to_owned())
-        .collect();
-    let crate_dir = Path::new(matches.value_of("output-directory").unwrap());
-    let src_dir = crate_dir.join("src");
-    let cargo_toml_template_path = matches
-        .value_of("cargo-toml-template")
-        .map(|v| Path::new(v).to_path_buf());
-    let pkg_name = matches.value_of("pkg-name").unwrap();
-    let pkg_version = matches.value_of("pkg-version").unwrap_or("0.1.0");
-    let pkg_authors: Vec<String> = if let Some(authors) = matches.values_of("pkg-author") {
-        authors.map(|v| v.to_owned()).collect()
-    } else {
-        vec![]
-    };
-    let disable_rustfmt = matches.is_present("disable-rustfmt");
+fn main() -> Result<()> {
+    let opt = Opt::from_args();
+    let src_dir = opt.output_dir.join("src");
     let _ignore_err = std::fs::remove_dir_all(&src_dir);
     fs::create_dir_all(&src_dir).context(format!("create dir ({})", src_dir.display()))?;
     {
         // Find all .proto files in any of the root paths.
-        let mut proto_paths: Vec<String> = proto_root_paths
+        let mut proto_paths: Vec<String> = opt
+            .root
             .iter()
             .map(|path| {
                 WalkDir::new(path)
@@ -104,8 +61,8 @@ fn main() -> Result<()> {
         // And generate protobuf/gRPC code.
         tonic_build::configure()
             .out_dir(&src_dir)
-            .format(!disable_rustfmt)
-            .compile(&proto_paths[..], &proto_root_paths[..])
+            .format(!opt.disable_rustfmt)
+            .compile(&proto_paths[..], &opt.root[..])
             .context(format!("generate protobuf ({})", src_dir.display()))?;
     }
     // Generate a lib.rs file containing all the module definitions and use statements.
@@ -115,16 +72,13 @@ fn main() -> Result<()> {
         scope.raw("#![allow(clippy::wrong_self_convention)]");
         scope.raw("#![allow(clippy::large_enum_variant)]");
         scope.raw("#![allow(clippy::unreadable_literal)]");
-        mod_to_scope(
-            &mut scope,
-            &Module::build(Path::new(&src_dir), &[&lib_rs_path])?,
-        );
+        Module::build(Path::new(&src_dir), &[&lib_rs_path])?.codegen(&mut scope);
         File::create(&lib_rs_path)
             .context("create lib.rs")?
             .write_all(scope.to_string().as_bytes())
             .context("write lib.rs")?;
     }
-    if !disable_rustfmt {
+    if !opt.disable_rustfmt {
         // Format with rustfmt if it is available otherwise skip it.
         if let Err(err) = Command::new("rustfmt")
             .args(&["--edition", "2018", lib_rs_path.to_str().unwrap()])
@@ -133,33 +87,14 @@ fn main() -> Result<()> {
             println!("Failed to format lib.rs: {:?}", err);
         }
     }
-
     // Copy the Cargo template and set version
     Ok(write_cargo_toml(
-        cargo_toml_template_path,
-        &crate_dir.join("Cargo.toml"),
-        pkg_name,
-        pkg_authors,
-        pkg_version,
+        opt.cargo_toml_template,
+        &opt.output_dir.join("Cargo.toml"),
+        &opt.pkg_name,
+        opt.pkg_author,
+        &opt.pkg_version,
     )?)
-}
-
-fn mod_to_scope(scope: &mut Scope, module: &Module) {
-    // Declare internal modules.
-    for mod_name in module.sorted_priv_modules() {
-        scope.new_module(&mod_name);
-    }
-    // Traverse child modules.
-    for (child_name, child_mod) in module.sorted_children() {
-        let module = scope.new_module(child_name).vis("pub");
-        mod_to_scope(module.scope(), child_mod);
-    }
-    // Use public modules.
-    for mod_name in module.sorted_pub_modules() {
-        scope
-            .import(&format!("super::{}", mod_name), "*")
-            .vis("pub");
-    }
 }
 
 fn write_cargo_toml(
