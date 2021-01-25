@@ -21,13 +21,13 @@ struct Opt {
     /// Cargo.toml template file to use
     #[structopt(short, long, parse(from_os_str))]
     cargo_toml_template: Option<PathBuf>,
-    /// Package name
+    /// Set crate name
     #[structopt(short, long)]
     pkg_name: String,
-    /// Package version
+    /// Set crate version
     #[structopt(long, default_value = "0.1.0")]
     pkg_version: String,
-    /// Package author(s)
+    /// Set crate author(s)
     #[structopt(long)]
     pkg_author: Vec<String>,
     /// Disable rustfmt to be run on generated code (will otherwise be run if present)

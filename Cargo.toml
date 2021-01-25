@@ -7,15 +7,11 @@ edition = "2018"
 
 [dependencies]
 walkdir = "2.3.1"
-tonic-build = {version = "0.3.1", default-features = false, features = ["rustfmt", "prost", "transport"] }
+tonic-build = {version = "0.4.0", default-features = false, features = ["rustfmt", "prost", "transport"] }
+prost-build = "0.7.0"
 codegen = "0.1.3"
 anyhow = "1.0.38"
 structopt = "0.3.21"
-
-# Until fix has been approved in Prost master and/or released we use a patched version of Prost to
-# allow for using protoc from current environment. /Olle
-[patch.crates-io]
-prost-build = { git = "ssh://git@github.com/einride/prost.git", branch = "runtime_protoc" }
 
 [dev-dependencies]
 tempdir = "0.3.7"
