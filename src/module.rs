@@ -91,7 +91,7 @@ impl Module {
     pub fn codegen(&self, scope: &mut Scope) {
         // Declare internal modules.
         for mod_name in self.sorted_priv_modules() {
-            scope.new_module(&mod_name);
+            scope.raw(&format!("mod {};", &mod_name));
         }
         // Traverse child modules.
         for (child_name, child_mod) in self.sorted_children() {
@@ -166,7 +166,7 @@ mod tests {
             strip(&scope.to_string()),
             strip(
                 r#"
-                mod foo_internal {}
+                mod foo_internal;
                 pub mod foo {
                     pub use super::foo_internal::*;
                 }
@@ -191,7 +191,7 @@ mod tests {
             strip(
                 r#"
                 pub mod foo {
-                    mod foo_v1_internal {}
+                    mod foo_v1_internal;
                     pub mod v1 {
                         pub use super::foo_v1_internal::*;
                     }
@@ -220,14 +220,14 @@ mod tests {
             strip(&scope.to_string()),
             strip(
                 r#"
-                mod first_internal {}
+                mod first_internal;
                 pub mod first {
                     pub use super::first_internal::*;
                 }
                 pub mod foo {
                     pub mod v1 {
-                        mod foo_v1_one_internal {}
-                        mod foo_v1_two_internal {}
+                        mod foo_v1_one_internal;
+                        mod foo_v1_two_internal;
                         pub mod one {
                             pub use super::foo_v1_one_internal::*;
                         }
