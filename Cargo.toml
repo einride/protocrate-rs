@@ -1,5 +1,5 @@
 [package]
-name = "proto-crate-gen"
+name = "protocrate"
 version = "0.1.0"
 authors = ["Einride <open-source@einride.tech>"]
 description = "Tool for generating a Rust crate from a tree of protobuf files."

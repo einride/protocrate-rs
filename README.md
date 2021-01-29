@@ -6,11 +6,11 @@ Generated code is structured in modules according to the protobuf package name.
 
 ## Build
 ```console
-cargo build
+dev@work:~$ cargo build
 ```
 
 ## Example Usage
 Generate a crate named `my-pb-crate` in direcotry `gen`  using protobuf files from the directories `proto/common`, `proto/internal` and `proto/external`:
 ```console
-proto-crate-gen --output-dir gen --pkg-name my-pb-crate --pkg-version 0.2.1 proto/common proto/internal proto/external
+dev@work:~$ protocrate --output-dir gen --pkg-name my-pb-crate --pkg-version 0.2.1 proto/common proto/internal proto/external
 ```
