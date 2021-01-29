@@ -53,6 +53,9 @@ jobs:
       - name: Build Release Binary
         if: startsWith(github.ref, 'refs/tags/')
         run: cargo build --all --release && strip target/release/${{ env.BIN_NAME }} && mv target/release/${{ env.BIN_NAME }} target/release/${{ env.BIN_NAME }}_${{ matrix.target }}
+        env:
+          PROTOC: protoc
+          PROTOC_INCLUDE: .
 
       - name: Attach Release Binaries
         uses: softprops/action-gh-release@v1
