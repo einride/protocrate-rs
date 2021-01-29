@@ -5,6 +5,7 @@ authors = ["Einride <open-source@einride.tech>"]
 description = "Tool for generating a Rust crate from a tree of protobuf files."
 categories = ["command-line-utilities", "network-programming"]
 keywords = ["grpc", "protobuf"]
+repository = "https://github.com/einride/protocrate-rs"
 readme = "README.md"
 license = "MIT"
 edition = "2018"
