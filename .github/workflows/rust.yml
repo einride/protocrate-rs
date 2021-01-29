@@ -5,7 +5,7 @@ name: CI
 jobs:
   ci:
     env:
-      BIN_NAME: proto-crate-gen
+      BIN_NAME: protocrate
     strategy:
       matrix:
         include:

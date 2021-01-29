@@ -280,7 +280,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "proto-crate-gen"
+name = "protocrate"
 version = "0.1.0"
 dependencies = [
  "anyhow",
