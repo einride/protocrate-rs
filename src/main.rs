@@ -88,13 +88,13 @@ fn main() -> Result<()> {
         }
     }
     // Copy the Cargo template and set version
-    Ok(write_cargo_toml(
+    write_cargo_toml(
         opt.cargo_toml_template,
         &opt.output_dir.join("Cargo.toml"),
         &opt.pkg_name,
         opt.pkg_author,
         &opt.pkg_version,
-    )?)
+    )
 }
 
 fn write_cargo_toml(
