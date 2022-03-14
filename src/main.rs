@@ -48,14 +48,13 @@ fn main() -> Result<()> {
         let mut proto_paths: Vec<String> = opt
             .root
             .iter()
-            .map(|path| {
+            .flat_map(|path| {
                 WalkDir::new(path)
                     .into_iter()
                     .filter_map(|e| e.ok())
                     .filter(|e| e.path().extension() == Some(OsStr::new("proto")))
                     .map(|e| e.path().to_str().unwrap().to_owned())
             })
-            .flatten()
             .collect();
         proto_paths.sort();
         // And generate protobuf/gRPC code.
@@ -88,13 +87,13 @@ fn main() -> Result<()> {
         }
     }
     // Copy the Cargo template and set version
-    Ok(write_cargo_toml(
+    write_cargo_toml(
         opt.cargo_toml_template,
         &opt.output_dir.join("Cargo.toml"),
         &opt.pkg_name,
         opt.pkg_author,
         &opt.pkg_version,
-    )?)
+    )
 }
 
 fn write_cargo_toml(

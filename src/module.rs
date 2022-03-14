@@ -37,7 +37,7 @@ impl Module {
                 .context("file stem to string")?
                 .replace("r#", "");
             let mod_path: Vec<&str> = file_stem.split('.').collect();
-            let internal_mod_name = file_stem.replace(".", "_") + "_internal";
+            let internal_mod_name = file_stem.replace('.', "_") + "_internal";
             {
                 let new_file_name = internal_mod_name.clone() + ".rs";
                 let mut new_dir = path.parent().context("path parent")?.to_path_buf();
