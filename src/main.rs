@@ -60,7 +60,6 @@ fn main() -> Result<()> {
         // And generate protobuf/gRPC code.
         tonic_build::configure()
             .out_dir(&src_dir)
-            .format(!opt.disable_rustfmt)
             .compile(&proto_paths[..], &opt.root[..])
             .context(format!("generate protobuf ({})", src_dir.display()))?;
     }
