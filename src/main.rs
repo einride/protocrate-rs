@@ -12,6 +12,8 @@ use walkdir::WalkDir;
 
 use module::Module;
 
+pub const DESCRIPTOR_PATH: &str = "resources";
+
 #[derive(StructOpt, Debug)]
 #[structopt(name = env!("CARGO_PKG_NAME"))]
 struct Opt {
@@ -42,6 +44,7 @@ fn main() -> Result<()> {
     let opt = Opt::from_args();
     let src_dir = opt.output_dir.join("src");
     let _ignore_err = std::fs::remove_dir_all(&src_dir);
+    fs::create_dir_all(DESCRIPTOR_PATH).context(format!("create dir ({})", src_dir.display()))?;
     fs::create_dir_all(&src_dir).context(format!("create dir ({})", src_dir.display()))?;
     {
         // Find all .proto files in any of the root paths.
@@ -57,10 +60,27 @@ fn main() -> Result<()> {
             })
             .collect();
         proto_paths.sort();
-        // And generate protobuf/gRPC code.
+
+        let descriptor_path = PathBuf::from(&src_dir)
+            .parent()
+            .unwrap()
+            .join(DESCRIPTOR_PATH)
+            .join("descriptor.bin");
+
+        let mut config = prost_build::Config::new();
+        config
+            .file_descriptor_set_path(descriptor_path)
+            .out_dir(&src_dir);
+        let mut builder = prost_reflect_build::Builder::new();
+        builder
+            .configure(&mut config, &proto_paths[..], &opt.root[..])
+            .context(format!(
+                "generate reflective protobuf ({})",
+                src_dir.display()
+            ))?;
         tonic_build::configure()
-            .out_dir(&src_dir)
-            .compile(&proto_paths[..], &opt.root[..])
+            .out_dir(&src_dir) // needed because tonic looks in a different place for the out dir than prost
+            .compile_with_config(config, &proto_paths[..], &opt.root[..])
             .context(format!("generate protobuf ({})", src_dir.display()))?;
     }
     // Generate a lib.rs file containing all the module definitions and use statements.
@@ -70,6 +90,14 @@ fn main() -> Result<()> {
         scope.raw("#![allow(clippy::wrong_self_convention)]");
         scope.raw("#![allow(clippy::large_enum_variant)]");
         scope.raw("#![allow(clippy::unreadable_literal)]");
+
+        // Adding getter for descriptor pool
+        let line = format!("static DESCRIPTOR_POOL: Lazy<DescriptorPool>
+        = Lazy::new(|| DescriptorPool::decode(include_bytes!(\"{}/descriptor.bin\").as_ref()).unwrap());", DESCRIPTOR_PATH);
+        scope.import("prost_reflect", "DescriptorPool");
+        scope.import("once_cell::sync", "Lazy");
+        scope.raw(line.as_str());
+
         Module::build(Path::new(&src_dir), &[&lib_rs_path])?.codegen(&mut scope);
         File::create(&lib_rs_path)
             .context("create lib.rs")?
