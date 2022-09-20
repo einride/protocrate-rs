@@ -12,8 +12,6 @@ use walkdir::WalkDir;
 
 use module::Module;
 
-pub const DESCRIPTOR_PATH: &str = "resources";
-
 #[derive(StructOpt, Debug)]
 #[structopt(name = env!("CARGO_PKG_NAME"))]
 struct Opt {
@@ -43,9 +41,13 @@ struct Opt {
 fn main() -> Result<()> {
     let opt = Opt::from_args();
     let src_dir = opt.output_dir.join("src");
+    let resources_dir = opt.output_dir.join("resources");
     let _ignore_err = std::fs::remove_dir_all(&src_dir);
-    fs::create_dir_all(DESCRIPTOR_PATH).context(format!("create dir ({})", src_dir.display()))?;
+    fs::create_dir_all(&resources_dir)
+        .context(format!("create dir ({})", resources_dir.display()))?;
     fs::create_dir_all(&src_dir).context(format!("create dir ({})", src_dir.display()))?;
+    let descriptor_path = PathBuf::from(&resources_dir).join("file_descriptor_set.bin");
+
     {
         // Find all .proto files in any of the root paths.
         let mut proto_paths: Vec<String> = opt
@@ -61,18 +63,10 @@ fn main() -> Result<()> {
             .collect();
         proto_paths.sort();
 
-        let descriptor_path = PathBuf::from(&src_dir)
-            .parent()
-            .unwrap()
-            .join(DESCRIPTOR_PATH)
-            .join("descriptor.bin");
-
         let mut config = prost_build::Config::new();
-        config
-            .file_descriptor_set_path(descriptor_path)
-            .out_dir(&src_dir);
-        let mut builder = prost_reflect_build::Builder::new();
-        builder
+        config.out_dir(&src_dir);
+        prost_reflect_build::Builder::new()
+            .file_descriptor_set_path(&descriptor_path)
             .configure(&mut config, &proto_paths[..], &opt.root[..])
             .context(format!(
                 "generate reflective protobuf ({})",
@@ -92,10 +86,13 @@ fn main() -> Result<()> {
         scope.raw("#![allow(clippy::unreadable_literal)]");
 
         // Adding getter for descriptor pool
-        let line = format!("static DESCRIPTOR_POOL: Lazy<DescriptorPool>
-        = Lazy::new(|| DescriptorPool::decode(include_bytes!(\"{}/descriptor.bin\").as_ref()).unwrap());", DESCRIPTOR_PATH);
         scope.import("prost_reflect", "DescriptorPool");
         scope.import("once_cell::sync", "Lazy");
+        let line = format!(
+            "static DESCRIPTOR_POOL: Lazy<DescriptorPool>
+        = Lazy::new(|| DescriptorPool::decode(include_bytes!(\"..{}\").as_ref()).unwrap());",
+            strip_prefix(descriptor_path, &opt.output_dir).display()
+        );
         scope.raw(line.as_str());
 
         Module::build(Path::new(&src_dir), &[&lib_rs_path])?.codegen(&mut scope);
@@ -121,6 +118,14 @@ fn main() -> Result<()> {
         opt.pkg_author,
         &opt.pkg_version,
     )
+}
+
+fn strip_prefix(path: PathBuf, prefix: &Path) -> PathBuf {
+    if !path.starts_with(prefix) {
+        return path;
+    }
+
+    PathBuf::from(path.to_str().unwrap()[prefix.to_str().unwrap().len()..].to_owned())
 }
 
 fn write_cargo_toml(
@@ -157,4 +162,17 @@ fn write_cargo_toml(
         .context("error creating Cargo.toml")?
         .write_all(content.as_bytes())
         .context("error writing Cargo.toml")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_strip() {
+        let path = PathBuf::from("path/to/jassob");
+        let prefix = PathBuf::from("path/to/");
+
+        assert_eq!("jassob", strip_prefix(path, &prefix).to_str().unwrap())
+    }
 }
