@@ -1,6 +1,6 @@
 # Protobuf Rust Crate Generator
 Tool for generating a Rust crate from one or multiple trees of protobuf files.
-Protobuf code is generated using [PROST!](https://github.com/danburkert/prost) and gRCP using [Tonic](https://github.com/hyperium/tonic).
+Protobuf code is generated using [PROST!](https://github.com/tokio-rs/prost) and gRCP using [Tonic](https://github.com/hyperium/tonic).
 
 Generated code is structured in modules according to the protobuf package name.
 
