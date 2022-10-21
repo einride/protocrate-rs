@@ -84,6 +84,7 @@ fn main() -> Result<()> {
         scope.raw("#![allow(clippy::wrong_self_convention)]");
         scope.raw("#![allow(clippy::large_enum_variant)]");
         scope.raw("#![allow(clippy::unreadable_literal)]");
+        scope.raw("#![allow(clippy::derive_partial_eq_without_eq)]");
 
         // Adding getter for descriptor pool
         scope.raw("use prost_reflect::DescriptorPool;");
