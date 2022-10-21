@@ -86,8 +86,8 @@ fn main() -> Result<()> {
         scope.raw("#![allow(clippy::unreadable_literal)]");
 
         // Adding getter for descriptor pool
-        scope.import("prost_reflect", "DescriptorPool");
-        scope.import("once_cell::sync", "Lazy");
+        scope.raw("use prost_reflect::DescriptorPool;");
+        scope.raw("use once_cell::sync::Lazy;");
         let line = format!(
             "static DESCRIPTOR_POOL: Lazy<DescriptorPool>
         = Lazy::new(|| DescriptorPool::decode(include_bytes!(\"..{}\").as_ref()).unwrap());",
