@@ -105,7 +105,7 @@ fn main() -> Result<()> {
     if !opt.disable_rustfmt {
         // Format with rustfmt if it is available otherwise skip it.
         if let Err(err) = Command::new("rustfmt")
-            .args(&["--edition", "2018", lib_rs_path.to_str().unwrap()])
+            .args(["--edition", "2018", lib_rs_path.to_str().unwrap()])
             .spawn()
         {
             println!("Failed to format lib.rs: {:?}", err);
