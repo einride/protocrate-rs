@@ -128,13 +128,13 @@ fn escape_reserved_keywords(ident: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempdir::TempDir;
+    use tempfile::Builder;
 
     fn create_files(paths: &[&Path]) {
         for path in paths {
             let dir = path.parent().unwrap();
             fs::create_dir_all(dir).unwrap();
-            std::fs::File::create(path).unwrap();
+            fs::File::create(path).unwrap();
         }
     }
     // Remove unnecessary whitespace (\n and mulitple spaces)
@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn single_file_no_child() {
         // Given
-        let root = TempDir::new("root").unwrap();
+        let root = Builder::new().prefix("root").tempdir().unwrap();
         create_files(&[&root.path().join("foo.rs")]);
 
         // When
@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn single_file_with_child() {
         // Given
-        let root = TempDir::new("root").unwrap();
+        let root = Builder::new().prefix("root").tempdir().unwrap();
         create_files(&[&root.path().join("foo.v1.rs")]);
 
         // When
@@ -203,7 +203,7 @@ mod tests {
     #[test]
     fn multiple_files() {
         // Given
-        let root = TempDir::new("root").unwrap();
+        let root = Builder::new().prefix("root").tempdir().unwrap();
         create_files(&[
             &root.path().join("first.rs"),
             &root.path().join("foo.v1.one.rs"),
