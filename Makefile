@@ -26,5 +26,7 @@ fmt-check:
 	cargo fmt --all -- --check
 
 .PHONY: test
-test:
+test: build
 	RUST_BACKTRACE=1 cargo test --all
+	cargo run -- test --output-dir=gen --pkg-name=test
+	cd gen && cargo build
