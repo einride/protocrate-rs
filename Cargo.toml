@@ -16,7 +16,7 @@ codegen = "0.2.0"
 prost-build = "0.11.9"
 structopt = "0.3.26"
 walkdir = "2.3.2"
-tonic-build = {version = "0.9.2", default-features = false, features = ["prost", "transport"] }
+tonic-build = {version = "0.10.0", default-features = false, features = ["prost", "transport"] }
 prost-reflect-build = "0.11.0"
 
 [dev-dependencies]
