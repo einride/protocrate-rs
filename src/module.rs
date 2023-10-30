@@ -58,7 +58,7 @@ impl Module {
             let child = self
                 .child_mod
                 .entry(escape_reserved_keywords(path[0]))
-                .or_insert_with(Module::default);
+                .or_default();
             child.path_to_mod(mod_name, &path[1..]);
             if path.len() == 1 {
                 self.priv_mod
