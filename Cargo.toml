@@ -11,7 +11,7 @@ license = "MIT"
 edition = "2018"
 
 [dependencies]
-anyhow = "1.0.76"
+anyhow = "1.0.78"
 codegen = "0.2.0"
 prost-build = "0.12.3"
 structopt = "0.3.26"
