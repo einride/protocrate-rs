@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package test.v1;
+
+service TestService {
+  rpc Test(TestRequest) returns (TestResponse) {}
+}
+
+message TestRequest {
+  string id = 1;
+}
+
+message TestResponse {
+  bool successful = 1;
+}
+
+message TestDeprecated {
+  bool deprecated = 1 [deprecated = true];
+  bool not_deprecated = 2;
+}
+
+message TestAllDeprecated {
+  option deprecated = true;
+  bool a = 1;
+  bool b = 2;
+}
+
+enum TestEnum {
+  TestA = 0;
+  TestB = 1 [deprecated = true];
+  TestC = 2;
+}
