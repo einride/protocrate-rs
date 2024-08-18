@@ -4,4 +4,11 @@ updates:
   - package-ecosystem: cargo
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+    groups:
+      cargo-dependencies:
+        patterns:
+          - "*"  # Include all dependencies in one PR
+        update-types:
+          - "minor"
+          - "patch"
