@@ -91,7 +91,7 @@ impl Module {
     pub fn codegen(&self, scope: &mut Scope) {
         // Declare internal modules.
         for mod_name in self.sorted_priv_modules() {
-            scope.raw(&format!("mod {};", &mod_name));
+            scope.raw(format!("mod {};", &mod_name));
         }
         // Traverse child modules.
         for (child_name, child_mod) in self.sorted_children() {
